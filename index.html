@@ -450,7 +450,8 @@ function render(){
   if(gasolinaDelMes.length > 0 && todaGasolina.length > 0){
     const ultimo = todaGasolina[todaGasolina.length - 1];
     const anterior = todaGasolina.length > 1 ? todaGasolina[todaGasolina.length - 2] : null;
-    const kmMostrar = ultimo.kmActual != null ? ultimo.kmActual : 0;
+    const referencia = anterior || ultimo;
+    const kmMostrar = referencia.kmActual != null ? referencia.kmActual : 0;
     const costoMostrar = anterior != null ? anterior.monto : ultimo.monto;
     document.getElementById('totalKm').textContent = fmtKm(kmMostrar) + ' km';
     document.getElementById('totalCombustible').textContent = fmtMoney(costoMostrar);
@@ -488,7 +489,7 @@ function render(){
     <div class="mov">
       <div class="izq">
         <div class="desc">${m.categoria || m.descripcion || 'Sin categoría'}</div>
-        <div class="meta">${formatearFecha(m.fecha)}${m.descripcion && m.categoria ? ' · ' + m.descripcion : ''}${m.kmActual != null ? ' · ' + fmtKm(m.kmActual) + ' km recorridos' : ''} · ${m.origen || 'Manual'}</div>
+        <div class="meta">${formatearFecha(m.fecha)}${m.descripcion && m.categoria ? ' · ' + m.descripcion : ''}${esCategoriaGasolina(m.categoria) ? ' · ' + fmtKm(m.kmActual != null ? m.kmActual : 0) + ' km recorridos' : ''} · ${m.origen || 'Manual'}</div>
       </div>
       <div class="der">
         <div class="monto ${m.tipo === 'Ingreso' ? 'ingreso' : 'gasto'}">${m.tipo === 'Ingreso' ? '+' : '-'}${fmtMoney(m.monto)}</div>
