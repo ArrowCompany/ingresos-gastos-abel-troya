@@ -230,6 +230,14 @@
   }
   .campo input:focus, .campo select:focus{outline:2px solid var(--emerald);outline-offset:0;}
 
+  .chips-categorias{display:flex;flex-wrap:wrap;gap:8px;}
+  .chip-cat{
+    border:1px solid var(--line);border-radius:20px;padding:7px 14px;font-size:13.5px;
+    background:var(--paper);color:var(--ink);cursor:pointer;font-weight:500;
+  }
+  .chip-cat.activo{background:var(--emerald-soft);border-color:var(--emerald);color:var(--emerald);}
+  .chip-cat.nueva{border-style:dashed;color:var(--ink-soft);display:flex;align-items:center;gap:4px;}
+
   .modal-btns{display:flex;gap:10px;margin-top:18px;}
   .modal-btns button{
     flex:1;padding:14px;border-radius:12px;border:none;font-weight:600;font-size:15px;cursor:pointer;
@@ -325,12 +333,18 @@
     </div>
     <div class="campo">
       <label>Categoría</label>
-      <input type="text" id="inCategoria" list="listaCategorias" placeholder="Ej. Gasolina, Comida, Repuestos" oninput="revisarCategoriaGasolina()">
-      <datalist id="listaCategorias"></datalist>
+      <div id="chipsCategorias" class="chips-categorias"></div>
+      <div id="nuevaCategoriaForm" style="display:none;margin-top:8px;gap:8px;">
+        <input type="text" id="inNuevaCategoria" placeholder="Nombre de la categoría" style="margin-bottom:6px;">
+        <div style="display:flex;gap:8px;">
+          <button type="button" class="btn-cancelar" style="flex:1;padding:9px;font-size:13px;" onclick="cancelarNuevaCategoria()">Cancelar</button>
+          <button type="button" class="btn-guardar" style="flex:1;padding:9px;font-size:13px;" onclick="confirmarNuevaCategoria()">Agregar</button>
+        </div>
+      </div>
     </div>
     <div class="campo" id="campoKm" style="display:none;">
       <label>Km recorridos con el gasto anterior</label>
-      <input type="number" id="inKmRecorrido" placeholder="Ej. 200" inputmode="numeric">
+      <input type="number" id="inKmRecorrido" placeholder="Ej. 200.5" inputmode="decimal" step="0.01">
       <div id="kmContextoPreview" style="font-size:12px;color:var(--ink-soft);margin-top:5px;"></div>
     </div>
     <div class="campo">
@@ -374,12 +388,17 @@ let mesActual = new Date();
 let tipoSeleccionado = 'Gasto';
 let categoriaFiltro = null;
 let idEnEdicion = null;
+let categoriaSeleccionada = '';
 
 const MESES = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
 
 function fmtMoney(n){
   const signo = n < 0 ? '-' : '';
   return signo + '$' + Math.abs(n).toFixed(2).replace(/\.00$/, '');
+}
+
+function fmtKm(n){
+  return Number(n).toFixed(2).replace(/\.?0+$/, '');
 }
 
 function mesKey(date){
@@ -433,7 +452,7 @@ function render(){
     const anterior = todaGasolina.length > 1 ? todaGasolina[todaGasolina.length - 2] : null;
     const kmMostrar = ultimo.kmActual != null ? ultimo.kmActual : 0;
     const costoMostrar = anterior != null ? anterior.monto : ultimo.monto;
-    document.getElementById('totalKm').textContent = kmMostrar + ' km';
+    document.getElementById('totalKm').textContent = fmtKm(kmMostrar) + ' km';
     document.getElementById('totalCombustible').textContent = fmtMoney(costoMostrar);
     kmCard.style.display = 'grid';
   }else{
@@ -469,7 +488,7 @@ function render(){
     <div class="mov">
       <div class="izq">
         <div class="desc">${m.categoria || m.descripcion || 'Sin categoría'}</div>
-        <div class="meta">${formatearFecha(m.fecha)}${m.descripcion && m.categoria ? ' · ' + m.descripcion : ''}${m.kmActual != null ? ' · ' + m.kmActual + ' km recorridos' : ''} · ${m.origen || 'Manual'}</div>
+        <div class="meta">${formatearFecha(m.fecha)}${m.descripcion && m.categoria ? ' · ' + m.descripcion : ''}${m.kmActual != null ? ' · ' + fmtKm(m.kmActual) + ' km recorridos' : ''} · ${m.origen || 'Manual'}</div>
       </div>
       <div class="der">
         <div class="monto ${m.tipo === 'Ingreso' ? 'ingreso' : 'gasto'}">${m.tipo === 'Ingreso' ? '+' : '-'}${fmtMoney(m.monto)}</div>
@@ -497,19 +516,84 @@ function ultimoCostoGasolina(excluirId){
   return registros[registros.length - 1].monto;
 }
 
+function categoriasGuardadasLocal(){
+  try{
+    return JSON.parse(localStorage.getItem('categoriasPersonalizadas') || '[]');
+  }catch(e){
+    return [];
+  }
+}
+
+function guardarCategoriaLocal(cat){
+  const guardadas = categoriasGuardadasLocal();
+  if(!guardadas.some(c => c.toLowerCase() === cat.toLowerCase())){
+    guardadas.push(cat);
+    localStorage.setItem('categoriasPersonalizadas', JSON.stringify(guardadas));
+  }
+}
+
+function todasLasCategorias(){
+  const deMovimientos = movimientos.map(m => m.categoria).filter(Boolean);
+  const locales = categoriasGuardadasLocal();
+  const set = new Map();
+  [...deMovimientos, ...locales].forEach(c => set.set(c.toLowerCase(), c));
+  return [...set.values()].sort((a,b) => a.localeCompare(b));
+}
+
+function renderChipsCategorias(){
+  const cont = document.getElementById('chipsCategorias');
+  const cats = todasLasCategorias();
+  cont.innerHTML = cats.map(c => `
+    <button type="button" class="chip-cat${c === categoriaSeleccionada ? ' activo' : ''}" onclick="seleccionarChipCategoria('${c.replace(/'/g, "\\'")}')">${c}</button>
+  `).join('') + `<button type="button" class="chip-cat nueva" onclick="mostrarFormNuevaCategoria()">+ Nueva</button>`;
+}
+
+function seleccionarChipCategoria(cat){
+  categoriaSeleccionada = cat;
+  renderChipsCategorias();
+  revisarCategoriaGasolina();
+}
+
+function mostrarFormNuevaCategoria(){
+  document.getElementById('nuevaCategoriaForm').style.display = 'block';
+  document.getElementById('inNuevaCategoria').value = '';
+  document.getElementById('inNuevaCategoria').focus();
+}
+
+function cancelarNuevaCategoria(){
+  document.getElementById('nuevaCategoriaForm').style.display = 'none';
+}
+
+function confirmarNuevaCategoria(){
+  const nombre = document.getElementById('inNuevaCategoria').value.trim();
+  if(!nombre){
+    mostrarToast('Escribe un nombre de categoría');
+    return;
+  }
+  guardarCategoriaLocal(nombre);
+  categoriaSeleccionada = nombre;
+  document.getElementById('nuevaCategoriaForm').style.display = 'none';
+  renderChipsCategorias();
+  revisarCategoriaGasolina();
+}
+
 function revisarCategoriaGasolina(){
-  const categoria = document.getElementById('inCategoria').value;
   const campoKm = document.getElementById('campoKm');
   const contexto = document.getElementById('kmContextoPreview');
-  if(esCategoriaGasolina(categoria)){
+  const inKm = document.getElementById('inKmRecorrido');
+  if(esCategoriaGasolina(categoriaSeleccionada)){
     campoKm.style.display = 'block';
     const costoAnterior = ultimoCostoGasolina(idEnEdicion);
-    contexto.textContent = costoAnterior != null
-      ? 'Corresponde al gasto anterior de ' + fmtMoney(costoAnterior)
-      : 'Este será tu primer registro de gasolina';
+    if(costoAnterior != null){
+      contexto.textContent = 'Corresponde al gasto anterior de ' + fmtMoney(costoAnterior);
+      inKm.placeholder = 'Ej. 200.5';
+    }else{
+      contexto.textContent = 'Primer tanqueo registrado — no hay viaje previo que medir, se deja en 0';
+      inKm.placeholder = 'No aplica todavía';
+    }
   }else{
     campoKm.style.display = 'none';
-    document.getElementById('inKmRecorrido').value = '';
+    inKm.value = '';
     contexto.textContent = '';
   }
 }
@@ -555,12 +639,11 @@ function abrirModalAgregar(){
   document.getElementById('tituloModalAgregar').textContent = 'Nuevo movimiento';
   document.getElementById('inFecha').value = new Date().toISOString().slice(0,10);
   elegirTipo('Gasto');
-  document.getElementById('inCategoria').value = '';
+  categoriaSeleccionada = '';
+  renderChipsCategorias();
+  document.getElementById('nuevaCategoriaForm').style.display = 'none';
   document.getElementById('inDescripcion').value = '';
   document.getElementById('inMonto').value = '';
-  const datalist = document.getElementById('listaCategorias');
-  const cats = [...new Set(movimientos.map(m => m.categoria).filter(Boolean))];
-  datalist.innerHTML = cats.map(c => `<option value="${c}">`).join('');
   document.getElementById('campoKm').style.display = 'none';
   document.getElementById('inKmRecorrido').value = '';
   document.getElementById('kmContextoPreview').textContent = '';
@@ -572,12 +655,11 @@ function editarMovimiento(id){
   if(!m) return;
   idEnEdicion = id;
   document.getElementById('tituloModalAgregar').textContent = 'Editar movimiento';
-  const datalist = document.getElementById('listaCategorias');
-  const cats = [...new Set(movimientos.map(x => x.categoria).filter(Boolean))];
-  datalist.innerHTML = cats.map(c => `<option value="${c}">`).join('');
 
   elegirTipo(m.tipo === 'Ingreso' ? 'Ingreso' : 'Gasto');
-  document.getElementById('inCategoria').value = m.categoria || '';
+  categoriaSeleccionada = m.categoria || '';
+  renderChipsCategorias();
+  document.getElementById('nuevaCategoriaForm').style.display = 'none';
   document.getElementById('inDescripcion').value = m.descripcion || '';
   document.getElementById('inMonto').value = m.monto;
   document.getElementById('inFecha').value = m.fecha;
@@ -588,7 +670,7 @@ function editarMovimiento(id){
     const costoAnterior = ultimoCostoGasolina(id);
     document.getElementById('kmContextoPreview').textContent = costoAnterior != null
       ? 'Corresponde al gasto anterior de ' + fmtMoney(costoAnterior)
-      : '';
+      : 'Primer tanqueo registrado — no hay viaje previo que medir';
   }else{
     document.getElementById('campoKm').style.display = 'none';
     document.getElementById('inKmRecorrido').value = '';
@@ -601,7 +683,8 @@ function editarMovimiento(id){
 function cerrarModalAgregar(){
   document.getElementById('overlayAgregar').classList.remove('show');
   idEnEdicion = null;
-  document.getElementById('inCategoria').value = '';
+  categoriaSeleccionada = '';
+  document.getElementById('nuevaCategoriaForm').style.display = 'none';
   document.getElementById('inDescripcion').value = '';
   document.getElementById('inMonto').value = '';
   document.getElementById('campoKm').style.display = 'none';
@@ -615,7 +698,7 @@ function elegirTipo(tipo){
 }
 
 async function guardarMovimiento(){
-  const categoria = document.getElementById('inCategoria').value.trim();
+  const categoria = categoriaSeleccionada.trim();
   const descripcion = document.getElementById('inDescripcion').value.trim();
   const monto = parseFloat(document.getElementById('inMonto').value);
   const fecha = document.getElementById('inFecha').value;
@@ -628,11 +711,12 @@ async function guardarMovimiento(){
   let kmActual = null;
   if(esCategoriaGasolina(categoria)){
     const kmVal = document.getElementById('inKmRecorrido').value;
-    if(kmVal === '' || Number(kmVal) <= 0){
+    const costoAnterior = ultimoCostoGasolina(idEnEdicion);
+    if(costoAnterior != null && (kmVal === '' || Number(kmVal) <= 0)){
       mostrarToast('Ingresa los km recorridos');
       return;
     }
-    kmActual = Number(kmVal);
+    kmActual = kmVal !== '' ? Number(kmVal) : 0;
   }
 
   const btn = document.getElementById('btnGuardar');
