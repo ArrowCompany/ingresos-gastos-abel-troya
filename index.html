@@ -119,6 +119,25 @@
   .resumen .card.ingresos .valor{color:var(--emerald);}
   .resumen .card.gastos .valor{color:var(--brick);}
 
+  .km-card{
+    background:var(--paper);
+    border:1px solid var(--line);
+    border-radius:var(--radius);
+    padding:14px 16px;
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:10px;
+    margin-bottom:18px;
+  }
+  .km-card .label{font-size:11px;color:var(--ink-soft);font-weight:500;}
+  .km-card .valor{
+    font-family:'JetBrains Mono',monospace;
+    font-weight:700;
+    font-size:18px;
+    margin-top:2px;
+  }
+  .km-card .valor.gasto{color:var(--brick);}
+
   .filtro-cat{
     display:flex;align-items:center;gap:8px;
     background:var(--paper);
@@ -269,6 +288,17 @@
       </div>
     </div>
 
+    <div class="km-card" id="kmCard" style="display:none;">
+      <div>
+        <div class="label">Km recorrido</div>
+        <div class="valor" id="totalKm">0 km</div>
+      </div>
+      <div>
+        <div class="label">Costo combustible</div>
+        <div class="valor gasto" id="totalCombustible">$0</div>
+      </div>
+    </div>
+
     <div class="filtro-cat" id="filtroCat" onclick="abrirModalCategorias()">
       <span class="txt" id="filtroCatTxt">Elegir detalles — filtrar por categoría</span>
       <span class="chip-x" onclick="event.stopPropagation(); quitarFiltro()">✕</span>
@@ -291,8 +321,20 @@
     </div>
     <div class="campo">
       <label>Categoría</label>
-      <input type="text" id="inCategoria" list="listaCategorias" placeholder="Ej. Gasolina, Comida, Repuestos">
+      <input type="text" id="inCategoria" list="listaCategorias" placeholder="Ej. Gasolina, Comida, Repuestos" oninput="revisarCategoriaGasolina()">
       <datalist id="listaCategorias"></datalist>
+    </div>
+    <div class="campo" id="campoKm" style="display:none;">
+      <label>Kilometraje</label>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+        <div>
+          <input type="number" id="inKmAnterior" placeholder="Km anterior" readonly style="background:var(--line);color:var(--ink-soft);">
+        </div>
+        <div>
+          <input type="number" id="inKmActual" placeholder="Km actual" inputmode="numeric" oninput="actualizarKmRecorrido()">
+        </div>
+      </div>
+      <div id="kmRecorridoPreview" style="font-size:12px;color:var(--ink-soft);margin-top:5px;"></div>
     </div>
     <div class="campo">
       <label>Descripción (opcional)</label>
@@ -385,6 +427,23 @@ function render(){
   document.getElementById('totalGastos').textContent = fmtMoney(gastos);
   document.getElementById('totalBalance').textContent = fmtMoney(ingresos - gastos);
 
+  const gasolinaDelMes = delMes.filter(m => esCategoriaGasolina(m.categoria));
+  const kmCard = document.getElementById('kmCard');
+  if(gasolinaDelMes.length > 0){
+    const kmTotal = gasolinaDelMes.reduce((a,b) => {
+      if(b.kmAnterior != null && b.kmActual != null && b.kmActual > b.kmAnterior){
+        return a + (b.kmActual - b.kmAnterior);
+      }
+      return a;
+    }, 0);
+    const costoTotal = gasolinaDelMes.reduce((a,b)=> a + b.monto, 0);
+    document.getElementById('totalKm').textContent = kmTotal + ' km';
+    document.getElementById('totalCombustible').textContent = fmtMoney(costoTotal);
+    kmCard.style.display = 'grid';
+  }else{
+    kmCard.style.display = 'none';
+  }
+
   let filtrados = delMes;
   const filtroEl = document.getElementById('filtroCat');
   const filtroTxt = document.getElementById('filtroCatTxt');
@@ -414,7 +473,7 @@ function render(){
     <div class="mov">
       <div class="izq">
         <div class="desc">${m.categoria || m.descripcion || 'Sin categoría'}</div>
-        <div class="meta">${formatearFecha(m.fecha)}${m.descripcion && m.categoria ? ' · ' + m.descripcion : ''} · ${m.origen || 'Manual'}</div>
+        <div class="meta">${formatearFecha(m.fecha)}${m.descripcion && m.categoria ? ' · ' + m.descripcion : ''}${m.kmAnterior != null && m.kmActual != null ? ' · ' + m.kmAnterior + ' → ' + m.kmActual + ' km' : ''} · ${m.origen || 'Manual'}</div>
       </div>
       <div class="der">
         <div class="monto ${m.tipo === 'Ingreso' ? 'ingreso' : 'gasto'}">${m.tipo === 'Ingreso' ? '+' : '-'}${fmtMoney(m.monto)}</div>
@@ -422,6 +481,48 @@ function render(){
       </div>
     </div>
   `).join('');
+}
+
+function esCategoriaGasolina(cat){
+  return (cat || '').trim().toLowerCase() === 'gasolina';
+}
+
+function ultimoKmActualGasolina(){
+  const registros = movimientos
+    .filter(m => esCategoriaGasolina(m.categoria) && m.kmActual != null)
+    .slice()
+    .sort((a,b) => a.fecha === b.fecha ? Number(a.id) - Number(b.id) : a.fecha.localeCompare(b.fecha));
+  if(registros.length === 0) return null;
+  return registros[registros.length - 1].kmActual;
+}
+
+function revisarCategoriaGasolina(){
+  const categoria = document.getElementById('inCategoria').value;
+  const campoKm = document.getElementById('campoKm');
+  if(esCategoriaGasolina(categoria)){
+    campoKm.style.display = 'block';
+    const ultimoKm = ultimoKmActualGasolina();
+    document.getElementById('inKmAnterior').value = ultimoKm != null ? ultimoKm : '';
+    actualizarKmRecorrido();
+  }else{
+    campoKm.style.display = 'none';
+    document.getElementById('inKmAnterior').value = '';
+    document.getElementById('inKmActual').value = '';
+    document.getElementById('kmRecorridoPreview').textContent = '';
+  }
+}
+
+function actualizarKmRecorrido(){
+  const anterior = parseFloat(document.getElementById('inKmAnterior').value);
+  const actual = parseFloat(document.getElementById('inKmActual').value);
+  const preview = document.getElementById('kmRecorridoPreview');
+  if(!isNaN(anterior) && !isNaN(actual) && actual > anterior){
+    preview.textContent = 'Km recorrido: ' + (actual - anterior) + ' km';
+  }else if(!isNaN(actual) && !isNaN(anterior) && actual <= anterior){
+    preview.textContent = 'El km actual debe ser mayor al anterior';
+  }else{
+    preview.textContent = '';
+  }
 }
 
 function formatearFecha(f){
@@ -466,6 +567,10 @@ function abrirModalAgregar(){
   const datalist = document.getElementById('listaCategorias');
   const cats = [...new Set(movimientos.map(m => m.categoria).filter(Boolean))];
   datalist.innerHTML = cats.map(c => `<option value="${c}">`).join('');
+  document.getElementById('campoKm').style.display = 'none';
+  document.getElementById('inKmAnterior').value = '';
+  document.getElementById('inKmActual').value = '';
+  document.getElementById('kmRecorridoPreview').textContent = '';
   document.getElementById('overlayAgregar').classList.add('show');
 }
 function cerrarModalAgregar(){
@@ -473,6 +578,10 @@ function cerrarModalAgregar(){
   document.getElementById('inCategoria').value = '';
   document.getElementById('inDescripcion').value = '';
   document.getElementById('inMonto').value = '';
+  document.getElementById('campoKm').style.display = 'none';
+  document.getElementById('inKmAnterior').value = '';
+  document.getElementById('inKmActual').value = '';
+  document.getElementById('kmRecorridoPreview').textContent = '';
 }
 function elegirTipo(tipo){
   tipoSeleccionado = tipo;
@@ -491,6 +600,22 @@ async function guardarMovimiento(){
     return;
   }
 
+  let kmAnterior = null, kmActual = null;
+  if(esCategoriaGasolina(categoria)){
+    const anteriorVal = document.getElementById('inKmAnterior').value;
+    const actualVal = document.getElementById('inKmActual').value;
+    if(actualVal === ''){
+      mostrarToast('Ingresa el km actual');
+      return;
+    }
+    kmAnterior = anteriorVal !== '' ? Number(anteriorVal) : null;
+    kmActual = Number(actualVal);
+    if(kmAnterior != null && kmActual <= kmAnterior){
+      mostrarToast('El km actual debe ser mayor al anterior');
+      return;
+    }
+  }
+
   const btn = document.getElementById('btnGuardar');
   btn.disabled = true; btn.textContent = 'Guardando…';
 
@@ -502,7 +627,8 @@ async function guardarMovimiento(){
         action: 'add',
         tipo: tipoSeleccionado,
         categoria, descripcion, monto, fecha,
-        origen: 'Manual'
+        origen: 'Manual',
+        kmAnterior, kmActual
       })
     });
     const data = await res.json();
