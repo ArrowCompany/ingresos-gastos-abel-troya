@@ -290,11 +290,11 @@
 
     <div class="km-card" id="kmCard" style="display:none;">
       <div>
-        <div class="label">Km recorrido</div>
+        <div class="label">Km recorrido (último gasto)</div>
         <div class="valor" id="totalKm">0 km</div>
       </div>
       <div>
-        <div class="label">Costo combustible</div>
+        <div class="label">Costo combustible (total mes)</div>
         <div class="valor gasto" id="totalCombustible">$0</div>
       </div>
     </div>
@@ -434,14 +434,12 @@ function render(){
   const gasolinaDelMes = delMes.filter(m => esCategoriaGasolina(m.categoria));
   const kmCard = document.getElementById('kmCard');
   if(gasolinaDelMes.length > 0){
-    const kmTotal = gasolinaDelMes.reduce((a,b) => {
-      if(b.kmAnterior != null && b.kmActual != null && b.kmActual > b.kmAnterior){
-        return a + (b.kmActual - b.kmAnterior);
-      }
-      return a;
-    }, 0);
+    const ordenados = gasolinaDelMes.slice().sort((a,b) => a.fecha === b.fecha ? Number(a.id) - Number(b.id) : a.fecha.localeCompare(b.fecha));
+    const ultimo = ordenados[ordenados.length - 1];
+    const kmUltimo = (ultimo.kmAnterior != null && ultimo.kmActual != null && ultimo.kmActual > ultimo.kmAnterior)
+      ? ultimo.kmActual - ultimo.kmAnterior : 0;
     const costoTotal = gasolinaDelMes.reduce((a,b)=> a + b.monto, 0);
-    document.getElementById('totalKm').textContent = kmTotal + ' km';
+    document.getElementById('totalKm').textContent = kmUltimo + ' km';
     document.getElementById('totalCombustible').textContent = fmtMoney(costoTotal);
     kmCard.style.display = 'grid';
   }else{
