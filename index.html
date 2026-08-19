@@ -328,7 +328,11 @@
       <label>Kilometraje</label>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
         <div>
-          <input type="number" id="inKmAnterior" placeholder="Km anterior" readonly style="background:var(--line);color:var(--ink-soft);">
+          <input type="number" id="inKmAnterior" placeholder="Km anterior" readonly style="background:var(--line);color:var(--ink-soft);" oninput="actualizarKmRecorrido()">
+          <label style="display:flex;align-items:center;gap:6px;font-size:11.5px;font-weight:500;color:var(--ink-soft);margin-top:6px;cursor:pointer;">
+            <input type="checkbox" id="chkEditarKmAnterior" onchange="toggleEditarKmAnterior()" style="width:15px;height:15px;accent-color:var(--emerald);cursor:pointer;">
+            Editar km anterior
+          </label>
         </div>
         <div>
           <input type="number" id="inKmActual" placeholder="Km actual" inputmode="numeric" oninput="actualizarKmRecorrido()">
@@ -496,13 +500,37 @@ function ultimoKmActualGasolina(){
   return registros[registros.length - 1].kmActual;
 }
 
+function toggleEditarKmAnterior(){
+  const chk = document.getElementById('chkEditarKmAnterior');
+  const input = document.getElementById('inKmAnterior');
+  if(chk.checked){
+    input.removeAttribute('readonly');
+    input.style.background = 'var(--bg)';
+    input.style.color = 'var(--ink)';
+    input.focus();
+  }else{
+    input.setAttribute('readonly', 'readonly');
+    input.style.background = 'var(--line)';
+    input.style.color = 'var(--ink-soft)';
+    const ultimoKm = ultimoKmActualGasolina();
+    input.value = ultimoKm != null ? ultimoKm : '';
+    actualizarKmRecorrido();
+  }
+}
+
 function revisarCategoriaGasolina(){
   const categoria = document.getElementById('inCategoria').value;
   const campoKm = document.getElementById('campoKm');
   if(esCategoriaGasolina(categoria)){
     campoKm.style.display = 'block';
+    const chk = document.getElementById('chkEditarKmAnterior');
+    chk.checked = false;
+    const input = document.getElementById('inKmAnterior');
+    input.setAttribute('readonly', 'readonly');
+    input.style.background = 'var(--line)';
+    input.style.color = 'var(--ink-soft)';
     const ultimoKm = ultimoKmActualGasolina();
-    document.getElementById('inKmAnterior').value = ultimoKm != null ? ultimoKm : '';
+    input.value = ultimoKm != null ? ultimoKm : '';
     actualizarKmRecorrido();
   }else{
     campoKm.style.display = 'none';
@@ -571,6 +599,10 @@ function abrirModalAgregar(){
   document.getElementById('inKmAnterior').value = '';
   document.getElementById('inKmActual').value = '';
   document.getElementById('kmRecorridoPreview').textContent = '';
+  document.getElementById('chkEditarKmAnterior').checked = false;
+  document.getElementById('inKmAnterior').setAttribute('readonly', 'readonly');
+  document.getElementById('inKmAnterior').style.background = 'var(--line)';
+  document.getElementById('inKmAnterior').style.color = 'var(--ink-soft)';
   document.getElementById('overlayAgregar').classList.add('show');
 }
 function cerrarModalAgregar(){
@@ -582,6 +614,10 @@ function cerrarModalAgregar(){
   document.getElementById('inKmAnterior').value = '';
   document.getElementById('inKmActual').value = '';
   document.getElementById('kmRecorridoPreview').textContent = '';
+  document.getElementById('chkEditarKmAnterior').checked = false;
+  document.getElementById('inKmAnterior').setAttribute('readonly', 'readonly');
+  document.getElementById('inKmAnterior').style.background = 'var(--line)';
+  document.getElementById('inKmAnterior').style.color = 'var(--ink-soft)';
 }
 function elegirTipo(tipo){
   tipoSeleccionado = tipo;
